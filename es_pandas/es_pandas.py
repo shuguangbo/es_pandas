@@ -80,7 +80,11 @@ class es_pandas(object):
             if len(key) < 1:
                 raise Exception('No templates exits: %s' % index)
             mapping[index]['mappings']['properties'] = mapping[index]['mappings'][key[0]]['properties']
-        dtype = {k: v['type'] for k, v in mapping[index]['mappings']['properties'].items() if k in heads}
+        
+        # Hacking for index*
+        indexone = list(mapping.keys())[0] if index.endswith("*") else index
+
+        dtype = {k: v['type'] for k, v in mapping[indexone]['mappings']['properties'].items() if k in heads}
         dtype = {k: self.dtype_mapping[v] for k, v in dtype.items() if v in self.dtype_mapping}
         return dtype
 
@@ -117,16 +121,21 @@ class es_pandas(object):
                 query_rule = {'query': dsl_from_sql['query']}
         elif not query_rule:
             query_rule = {'query': {'match_all': {}}}
-        count = self.es.count(index=index, body=query_rule)['count']
-        if count < 1:
-            return pd.DataFrame()
+        # Do not count if not show progress
+        count = 0
+        if show_progress:
+            count = self.es.count(index=index, body=query_rule)['count']
+            if count < 1:
+                return pd.DataFrame()
         query_rule['_source'] = heads
         anl = helpers.scan(self.es, query=query_rule, index=index, **kwargs)
-        df = pd.DataFrame(self.get_source(anl, show_progress=show_progress, count=count)).set_index('_id')
-        if infer_dtype:
-            dtype = self.infer_dtype(index, df.columns.values)
-        if len(dtype):
-            df = df.astype(dtype)
+        df = pd.DataFrame(self.get_source(anl, show_progress=show_progress, count=count))
+        if len(df):
+            if infer_dtype:
+                dtype = self.infer_dtype(index, df.columns.values)
+            if len(dtype):
+                df = df.astype(dtype)
+            df.set_index('_id', inplace=True)
         return df
 
     @staticmethod
