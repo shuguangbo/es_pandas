@@ -43,15 +43,13 @@ class es_pandas(object):
             doc_type = '_doc'
         elif not doc_type:
             doc_type = index + '_type'
-        gen = helpers.parallel_bulk(self.es,
+        success_num, fail_num = helpers.bulk(self.es,
                                     (self.rec_to_actions(df, index, doc_type=doc_type, show_progress=show_progress, 
                                                          use_index=use_index, _op_type=_op_type,
                                                          use_pandas_json=use_pandas_json, date_format=date_format)),
                                     **kwargs)
 
-        success_num = np.sum([res[0] for res in gen])
         rec_num = len(df)
-        fail_num = rec_num - success_num
 
         if (success_num / rec_num) < success_threshold:
             raise Exception('%d records write failed' % fail_num)
